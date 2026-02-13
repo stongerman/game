@@ -544,44 +544,71 @@ function actionSecret(){
 function enterSecretRealm(sr){
   addLog(`进入秘境【${sr.name}】...`,'purple');
   let floor=0;
+
+  const pickEnemyForSecret = (tier)=>{
+    const pool=getEnemyPool(tier);
+    if(!pool || !pool.length){
+      return {name:'秘境妖影',hp:50,atk:10,def:2,exp:20,ls:12};
+    }
+    return {...pool[Math.floor(Math.random()*pool.length)]};
+  };
+
   const next=()=>{
     floor++;
     if(floor>sr.floors){
       addLog(`秘境【${sr.name}】探索完毕！`,'great');
-      // Boss reward
+      // Boss reward (safe even if pool empty)
       const maxG=Math.min(4,Math.floor(sr.minRealm/5)+1);
       const pool=[...GONGFA_DB.filter(g=>g.grade<=maxG),...FABAO_DB.filter(f=>f.grade<=maxG)];
-      const reward=pool[Math.floor(Math.random()*pool.length)];
-      const rType=GONGFA_DB.includes(reward)?'gongfa':'fabao';
-      addToInventory(rType,reward);
-      addLog(`秘境奖励：${rType==='gongfa'?'功法':'法宝'}【${reward.name}】(${gradeName(reward.grade)}阶)！`,'great');
+      if(pool.length){
+        const reward=pool[Math.floor(Math.random()*pool.length)];
+        const rType=GONGFA_DB.includes(reward)?'gongfa':'fabao';
+        addToInventory(rType,reward);
+        addLog(`秘境奖励：${rType==='gongfa'?'功法':'法宝'}【${reward.name}】(${gradeName(reward.grade)}阶)！`,'great');
+      }else{
+        G.lingshi += 50;
+        addLog(`秘境奖励：今日宝库空空，只得 50 灵石。`,'good');
+      }
       G.age+=sr.floors;updateHUD();return;
     }
+
+    // Ensure there's at least one combat encounter (floor1 always fight)
     const r=Math.random();
-    if(r<0.5){
+    const tier=Math.min(4,Math.floor(sr.minRealm/5));
+
+    if(floor===1 || r<0.6){
       // Battle
-      const tier=Math.min(4,Math.floor(sr.minRealm/5));
-      const pool=getEnemyPool(tier);
-      const enemy={...pool[Math.floor(Math.random()*pool.length)]};
+      const enemy=pickEnemyForSecret(tier);
       enemy.name=`${sr.name}·${enemy.name}`;
       enemy.hp=Math.floor(enemy.hp*(0.9+floor*0.15));
       enemy.atk=Math.floor(enemy.atk*(0.9+floor*0.12));
       addLog(`第${floor}层：遭遇${enemy.name}！`,'danger');
       startBattle(enemy,()=>next());
-    }else if(r<0.7){
+      return;
+    }
+
+    if(r<0.75){
       const ls=Math.floor(10+sr.minRealm*2+Math.random()*20);G.lingshi+=ls;
       addLog(`第${floor}层：发现宝箱，获得${ls}灵石！`,'good');
-      next();
-    }else if(r<0.85){
-      G.hp=Math.min(G.hpMax,G.hp+Math.floor(G.hpMax*0.2));G.qi=Math.min(G.qiMax,G.qi+Math.floor(G.qiMax*0.2));
-      addLog(`第${floor}层：发现泉水，恢复体力。`,'good');next();
-    }else{
-      const exp=Math.floor(20+sr.minRealm*5+Math.random()*30);G.exp+=exp;
-      addLog(`第${floor}层：参悟壁画，+${exp}修为。`,'info');next();
+      next();return;
     }
+
+    if(r<0.88){
+      G.hp=Math.min(G.hpMax,G.hp+Math.floor(G.hpMax*0.2));
+      G.qi=Math.min(G.qiMax,G.qi+Math.floor(G.qiMax*0.2));
+      addLog(`第${floor}层：发现泉水，恢复体力。`,'good');
+      next();return;
+    }
+
+    const exp=Math.floor(20+sr.minRealm*5+Math.random()*30);G.exp+=exp;
+    addLog(`第${floor}层：参悟壁画，+${exp}修为。`,'info');
+    next();
   };
+
   next();
 }
+
+
 
 // ========== BATTLE SYSTEM ==========
 let battleState=null;
