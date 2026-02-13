@@ -5,16 +5,25 @@
 'use strict';
 
 // ===== 平衡参数（爽感调参入口）=====
+// config version: v3.1
 const BALANCE = {
+  // Growth / gains
   meditate: { base: 6, levelScale: 2, enlightenChance: 0.10 },
   practice: { base: 4 },
   explore:  { lingshiBase: 6, lingshiVar: 18, lingshiRealmScale: 3, expBase: 6, expVar: 16 },
+
+  // Costs (qi is the stamina-like resource)
+  cost: { qiMeditate: 5, qiPractice: 10, qiExplore: 8 },
+
+  // Breakthrough + combat
   breakthrough: { baseChance: 0.85, tribBase: 0.50, demonBase: 0.55 },
   combat: { critRate: 0.15, critMult: 2.0 },
+
+  // Systems
   streak: { win2Atk: 0.05, win3Atk: 0.10, win4Atk: 0.15 },
-  quest: { rewardExpMult: 1.2, rewardLingshiMult: 1.0 },
-  cost: { qiMeditate: 2, qiPractice: 2, qiExplore: 0 }
+  quest: { rewardExpMult: 1.2, rewardLingshiMult: 1.0 }
 };
+
 
 const SAVE_KEY = 'fanren_save_v2';
 
@@ -69,4 +78,51 @@ const FABAO_DB=[
   {id:'fb_pagoda1',name:'玲珑宝塔',grade:3,atkB:15,defB:35,desc:'镇压万邪的佛门至宝'},
   {id:'fb_sword4',name:'诛仙剑',grade:3,atkB:45,defB:5,desc:'上古诛仙四剑之首'},
   {id:'fb_cauldron',name:'乾坤鼎',grade:4,atkB:30,defB:40,desc:'天阶法宝！蕴含乾坤之力'},
+];
+
+// ========== UI helpers ==========
+const GRADE_NAMES = ['凡','黄','玄','地','天'];
+const GRADE_CSS   = ['g0','g1','g2','g3','g4'];
+const GRADE_COLOR = ['#9aa0a6','#10b981','#3b82f6','#a855f7','#f59e0b'];
+
+// ========== Enemies (by tier) ==========
+const ENEMIES = [
+  // tier 0: 练气
+  [
+    {name:'灰狼妖',hp:45,atk:8,def:2, exp:18, ls:10},
+    {name:'山贼',hp:40,atk:7,def:1, exp:16, ls:12},
+    {name:'毒蛇',hp:30,atk:9,def:1, exp:15, ls:8},
+  ],
+  // tier 1: 练气后期 / 筑基门槛
+  [
+    {name:'赤目虎妖',hp:85,atk:14,def:4, exp:40, ls:25},
+    {name:'黑风盗',hp:78,atk:13,def:4, exp:38, ls:28},
+    {name:'阴魂',hp:70,atk:15,def:3, exp:42, ls:20},
+  ],
+  // tier 2: 筑基
+  [
+    {name:'血煞尸',hp:140,atk:22,def:8, exp:90, ls:55},
+    {name:'火鳞蟒',hp:150,atk:24,def:7, exp:95, ls:50},
+    {name:'鬼面修士',hp:130,atk:26,def:6, exp:98, ls:60},
+  ],
+  // tier 3: 金丹
+  [
+    {name:'金甲傀儡',hp:240,atk:36,def:14, exp:180, ls:110},
+    {name:'噬魂魔',hp:220,atk:40,def:12, exp:190, ls:120},
+    {name:'玄冰妖王',hp:260,atk:38,def:15, exp:200, ls:130},
+  ],
+  // tier 4: 元婴+
+  [
+    {name:'天外邪魔',hp:420,atk:60,def:22, exp:360, ls:240},
+    {name:'雷狱真灵',hp:460,atk:62,def:24, exp:380, ls:260},
+    {name:'古魔残魂',hp:400,atk:66,def:20, exp:390, ls:280},
+  ],
+];
+
+// ========== Secret realms ==========
+const SECRET_REALMS = [
+  {id:'sr_forest', name:'幽林秘境', minRealm:2,  floors:3, desc:'灵草与妖兽并存，机缘与风险同在。'},
+  {id:'sr_cave',   name:'寒潭洞窟', minRealm:6,  floors:4, desc:'阴寒刺骨，常有阴魂出没。'},
+  {id:'sr_ruins',  name:'古修遗迹', minRealm:10, floors:5, desc:'残破阵法尚存，宝物亦被守护。'},
+  {id:'sr_tower',  name:'玲珑塔界', minRealm:13, floors:6, desc:'层层试炼，越往上越凶险。'},
 ];
