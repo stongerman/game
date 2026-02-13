@@ -1,6 +1,50 @@
 // core.js — 游戏引擎主逻辑（状态/行为/战斗/渲染）
-// 版本：v2
+// 版本：v2.1 (robust-click-fix)
 'use strict';
+
+
+// ===== DEBUG / SAFETY (mobile friendly) =====
+(function(){
+  // Capture runtime errors so "按钮没反应" becomes actionable.
+  window.__lastError = null;
+  window.addEventListener('error', function(ev){
+    try{
+      const msg = (ev && ev.message) ? ev.message : 'Unknown error';
+      window.__lastError = msg;
+      // Surface on-screen (log) if possible
+      if (typeof addLog === 'function') addLog('⚠️ 脚本错误：' + msg, 'danger');
+    }catch(e){}
+  });
+})();
+
+function safeNumber(v, d){ return (typeof v==='number' && isFinite(v)) ? v : d; }
+function getBalance(path, d){
+  try{
+    if(typeof BALANCE==='undefined' || !BALANCE) return d;
+    const parts=path.split('.');
+    let cur=BALANCE;
+    for(const p of parts){
+      if(cur && Object.prototype.hasOwnProperty.call(cur,p)) cur=cur[p];
+      else return d;
+    }
+    return cur;
+  }catch(e){ return d; }
+}
+function getEnemyPool(tier){
+  try{
+    if(typeof ENEMIES!=='undefined' && ENEMIES && ENEMIES[tier] && ENEMIES[tier].length) return ENEMIES[tier];
+  }catch(e){}
+  // fallback minimal
+  return [{name:'野狼',hp:40,atk:8,def:2,exp:16,ls:10},{name:'山贼',hp:35,atk:7,def:1,exp:14,ls:12}];
+}
+function getSecretRealms(){
+  try{ if(typeof SECRET_REALMS!=='undefined' && SECRET_REALMS) return SECRET_REALMS; }catch(e){}
+  return [];
+}
+function gradeName(g){
+  try{ if(typeof GRADE_NAMES!=='undefined' && GRADE_NAMES[g]) return GRADE_NAMES[g]; }catch(e){}
+  return '凡';
+}
 
 // ===== SAVE / LOAD =====
 function buildDbIndex(arr){
@@ -257,18 +301,30 @@ function showModalChoices(choices){
 function closeModal(){document.getElementById('modal').classList.remove('active');G.actionLocked=false;updateHUD()}
 
 // ========== ACTIONS ==========
+
 function doAction(type){
   if(G.actionLocked)return;
-  switch(type){
-    case 'meditate':actionMeditate();break;case 'practice':actionPractice();break;
-    case 'explore':actionExplore();break;case 'rest':actionRest();break;
-    case 'breakthrough':actionBreakthrough();break;case 'shop':actionShop();break;
-    case 'secret':actionSecret();break;
+  try{
+    switch(type){
+      case 'meditate':actionMeditate();break;
+      case 'practice':actionPractice();break;
+      case 'explore':actionExplore();break;
+      case 'rest':actionRest();break;
+      case 'breakthrough':actionBreakthrough();break;
+      case 'shop':actionShop();break;
+      case 'secret':actionSecret();break;
+      default: addLog('未知行动：'+type,'warn'); break;
+    }
+    G.age++;checkDeath();
+    if(typeof Systems!=='undefined'){ Systems.emit('afterAction',{type}); }
+    saveGame();
+    updateHUD();
+    saveGame();
+  }catch(e){
+    window.__lastError = (e && e.message) ? e.message : String(e);
+    try{ addLog('⚠️ 行动执行失败：'+type+' / '+window.__lastError,'danger'); }catch(_){}
+    try{ alert('动作失败：'+type+'\n' + window.__lastError); }catch(_){}
   }
-  G.age++;checkDeath();
-  if(typeof Systems!=='undefined'){ Systems.emit('afterAction',{type}); }
-  saveGame();
-  updateHUD();saveGame();
 }
 
 function checkDeath(){
@@ -292,7 +348,8 @@ function actionMeditate(){
   const base=Math.floor((BALANCE.meditate.base+G.meditateLevel*BALANCE.meditate.levelScale+G.realmIndex+gfBonus)*lg.expM*(1+(mods.expMult||0)));
   const v=Math.floor(Math.random()*4)-1;
   const gained=Math.max(1,base+v);
-  G.exp+=gained;G.qi=Math.max(0,G.qi-(BALANCE.cost?BALANCE.cost.qiMeditate:0));
+  const qiCost = safeNumber(getBalance('cost.qiMeditate', 5),5);
+  G.exp+=gained;G.qi=Math.max(0,G.qi-qiCost);
   if(Math.random()<(BALANCE.meditate.enlightenChance+(mods.enlightenBonus||0))){const b=Math.floor(gained*1.5);G.exp+=b;addLog(`打坐修炼，获得${gained}修为。灵光一闪，顿悟+${b}！`,'great')}
   else addLog(`静心打坐，获得${gained}修为。`,'normal');
   if(Math.random()<0.12)triggerRandomEvent();
@@ -303,7 +360,7 @@ function actionPractice(){
   const lg=LG[G.linggen];
   const mods=(typeof Systems!=='undefined'&&Systems.getModifiers)?Systems.getModifiers():{expMult:0};
   const base=Math.floor((BALANCE.practice.base+G.realmIndex)*lg.expM*(1+(mods.expMult||0)));
-  const qiCost=(BALANCE.cost?BALANCE.cost.qiPractice:0);
+  const qiCost = safeNumber(getBalance('cost.qiPractice', 10),10);
   if(G.qi<qiCost){addLog('灵力不足，修习效果不佳。','danger');G.exp+=Math.floor(base*0.3)}
   else{G.qi-=qiCost;G.exp+=base;
     if(Math.random()<0.3)G.baseAtk++;if(Math.random()<0.2)G.baseDef++;
@@ -314,14 +371,16 @@ function actionPractice(){
 // -- Explore (now can find gongfa/fabao!) --
 function actionExplore(){
   const mods=(typeof Systems!=='undefined'&&Systems.getModifiers)?Systems.getModifiers():{exploreMult:0};
-  const r=Math.random();G.qi=Math.max(0,G.qi-(BALANCE.cost?BALANCE.cost.qiExplore:0));
+  const qiCost = safeNumber(getBalance('cost.qiExplore', 8),8);
+  G.qi=Math.max(0,G.qi-qiCost);
+  const r=Math.random();
   if(r<0.2){
     const ls=Math.floor((Math.random()*BALANCE.explore.lingshiVar+BALANCE.explore.lingshiBase+G.realmIndex*BALANCE.explore.lingshiRealmScale)*(1+(mods.exploreMult||0)));G.lingshi+=ls;
     addLog(`探索发现${ls}块灵石！`,'good');
   } else if(r<0.35){
     // Auto battle!
     const tier=Math.min(4,Math.floor(G.realmIndex/5));
-    const pool=ENEMIES[tier];
+    const pool=getEnemyPool(tier);
     const enemy={...pool[Math.floor(Math.random()*pool.length)]};
     enemy.hp=Math.floor(enemy.hp*(0.8+Math.random()*0.4));
     startBattle(enemy);return;
@@ -331,14 +390,14 @@ function actionExplore(){
     const pool=GONGFA_DB.filter(g=>g.grade<=maxGrade);
     const found=pool[Math.floor(Math.random()*pool.length)];
     addToInventory('gongfa',found);
-    addLog(`发现功法【${found.name}】(${GRADE_NAMES[found.grade]}阶)！已放入背包。`,'great');
+    addLog(`发现功法【${found.name}】(${gradeName(found.grade)}阶)！已放入背包。`,'great');
   } else if(r<0.55){
     // Find fabao!
     const maxGrade=Math.min(3,Math.floor(G.realmIndex/6));
     const pool=FABAO_DB.filter(f=>f.grade<=maxGrade);
     const found=pool[Math.floor(Math.random()*pool.length)];
     addToInventory('fabao',found);
-    addLog(`获得法宝【${found.name}】(${GRADE_NAMES[found.grade]}阶)！`,'great');
+    addLog(`获得法宝【${found.name}】(${gradeName(found.grade)}阶)！`,'great');
   } else if(r<0.65){
     G.hp=Math.min(G.hpMax,G.hp+20);G.qi=Math.min(G.qiMax,G.qi+15);
     addLog('发现灵药，恢复灵力和生命！','good');
@@ -440,23 +499,35 @@ function actionShop(){
   ];
   // Sell random gongfa/fabao at shop
   const shopGrade=Math.min(3,Math.floor(G.realmIndex/5));
-  const shopGF=GONGFA_DB.filter(g=>g.grade<=shopGrade+1);
-  const randGF=shopGF[Math.floor(Math.random()*shopGF.length)];
-  const gfCost=20+randGF.grade*30;
-  choices.push({text:`${randGF.name}(${GRADE_NAMES[randGF.grade]}阶功法) ${gfCost}灵石`,action:()=>{
-    if(G.lingshi>=gfCost){G.lingshi-=gfCost;addToInventory('gongfa',randGF);addLog(`购得功法【${randGF.name}】！`,'great')}else addLog('灵石不足！','danger');closeModal()}});
-  const shopFB=FABAO_DB.filter(f=>f.grade<=shopGrade);
-  const randFB=shopFB[Math.floor(Math.random()*shopFB.length)];
-  const fbCost=15+randFB.grade*25;
-  choices.push({text:`${randFB.name}(${GRADE_NAMES[randFB.grade]}阶法宝) ${fbCost}灵石`,action:()=>{
-    if(G.lingshi>=fbCost){G.lingshi-=fbCost;addToInventory('fabao',randFB);addLog(`购得法宝【${randFB.name}】！`,'great')}else addLog('灵石不足！','danger');closeModal()}});
+
+  const shopGF=(typeof GONGFA_DB!=='undefined'?GONGFA_DB:[]).filter(g=>g && g.grade<=shopGrade+1);
+  if(shopGF.length){
+    const randGF=shopGF[Math.floor(Math.random()*shopGF.length)];
+    const gfCost=20+randGF.grade*30;
+    choices.push({text:`${randGF.name}(${gradeName(randGF.grade)}阶功法) ${gfCost}灵石`,action:()=>{
+      if(G.lingshi>=gfCost){G.lingshi-=gfCost;addToInventory('gongfa',randGF);addLog(`购得功法【${randGF.name}】！`,'great')}else addLog('灵石不足！','danger');closeModal()}});
+  } else {
+    choices.push({text:'（坊市暂无功法出售）',action:()=>{addLog('坊市今日功法断货。','normal');closeModal();}});
+  }
+
+  const shopFB=(typeof FABAO_DB!=='undefined'?FABAO_DB:[]).filter(f=>f && f.grade<=shopGrade);
+  if(shopFB.length){
+    const randFB=shopFB[Math.floor(Math.random()*shopFB.length)];
+    const fbCost=15+randFB.grade*25;
+    choices.push({text:`${randFB.name}(${gradeName(randFB.grade)}阶法宝) ${fbCost}灵石`,action:()=>{
+      if(G.lingshi>=fbCost){G.lingshi-=fbCost;addToInventory('fabao',randFB);addLog(`购得法宝【${randFB.name}】！`,'great')}else addLog('灵石不足！','danger');closeModal()}});
+  } else {
+    choices.push({text:'（坊市暂无法宝出售）',action:()=>{addLog('坊市今日法宝断货。','normal');closeModal();}});
+  }
+
   choices.push({text:'离开',action:()=>closeModal()});
   showModalChoices(choices);
 }
 
 // -- Secret Realm --
 function actionSecret(){
-  const available=SECRET_REALMS.filter(s=>G.realmIndex>=s.minRealm);
+  const realms=getSecretRealms();
+  const available=realms.filter(s=>G.realmIndex>=s.minRealm);
   if(available.length===0){addLog('当前境界没有可挑战的秘境。','info');return}
   G.actionLocked=true;
   const m=document.getElementById('modal');m.classList.add('active');
@@ -483,14 +554,14 @@ function enterSecretRealm(sr){
       const reward=pool[Math.floor(Math.random()*pool.length)];
       const rType=GONGFA_DB.includes(reward)?'gongfa':'fabao';
       addToInventory(rType,reward);
-      addLog(`秘境奖励：${rType==='gongfa'?'功法':'法宝'}【${reward.name}】(${GRADE_NAMES[reward.grade]}阶)！`,'great');
+      addLog(`秘境奖励：${rType==='gongfa'?'功法':'法宝'}【${reward.name}】(${gradeName(reward.grade)}阶)！`,'great');
       G.age+=sr.floors;updateHUD();return;
     }
     const r=Math.random();
     if(r<0.5){
       // Battle
       const tier=Math.min(4,Math.floor(sr.minRealm/5));
-      const pool=ENEMIES[tier];
+      const pool=getEnemyPool(tier);
       const enemy={...pool[Math.floor(Math.random()*pool.length)]};
       enemy.name=`${sr.name}·${enemy.name}`;
       enemy.hp=Math.floor(enemy.hp*(0.9+floor*0.15));
@@ -833,5 +904,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 window.continueGame = continueGame;
 window.resetSave = resetSave;
 
-// ===== expose for inline onclick =====
+
+// ===== Expose APIs for inline onclick =====
+window.showScreen = showScreen;
+window.switchTab = switchTab;
+window.selectLinggen = selectLinggen;
+window.startGame = startGame;
+window.doAction = doAction;
+window.continueGame = continueGame;
+window.resetSave = resetSave;
+window.clearSaveAndNew = function(){ resetSave(); showScreen('create'); };
 window.closeModal = closeModal;
