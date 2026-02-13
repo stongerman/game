@@ -81,6 +81,17 @@ function resetSave(){
   if(r) r.style.display='none';
 }
 
+// Title screen: clear save and directly start a new run
+function clearSaveAndNew(){
+  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+  // Jump to create screen without leaving the page
+  try{ showScreen('create'); }catch(e){}
+  const c=document.getElementById('btn-continue');
+  const r=document.getElementById('btn-reset');
+  if(c) c.style.display='none';
+  if(r) r.style.display='none';
+}
+
 function continueGame(){
   const ok = loadGame();
   if(!ok){
@@ -832,3 +843,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // Expose
 window.continueGame = continueGame;
 window.resetSave = resetSave;
+
+// ===== Expose UI handlers for inline onclick (mobile-friendly) =====
+// index.html uses inline onclick="..." attributes, so these must exist on window.
+window.showScreen = showScreen;
+window.switchTab = switchTab;
+window.selectLinggen = selectLinggen;
+window.startGame = startGame;
+window.doAction = doAction;
+window.clearSaveAndNew = clearSaveAndNew;
+// openQuestModal is exported by systems.js
