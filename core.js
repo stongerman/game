@@ -81,17 +81,6 @@ function resetSave(){
   if(r) r.style.display='none';
 }
 
-// Title screen: clear save and directly start a new run
-function clearSaveAndNew(){
-  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
-  // Jump to create screen without leaving the page
-  try{ showScreen('create'); }catch(e){}
-  const c=document.getElementById('btn-continue');
-  const r=document.getElementById('btn-reset');
-  if(c) c.style.display='none';
-  if(r) r.style.display='none';
-}
-
 function continueGame(){
   const ok = loadGame();
   if(!ok){
@@ -303,7 +292,7 @@ function actionMeditate(){
   const base=Math.floor((BALANCE.meditate.base+G.meditateLevel*BALANCE.meditate.levelScale+G.realmIndex+gfBonus)*lg.expM*(1+(mods.expMult||0)));
   const v=Math.floor(Math.random()*4)-1;
   const gained=Math.max(1,base+v);
-  G.exp+=gained;G.qi=Math.max(0,G.qi-BALANCE.cost.qiMeditate);
+  G.exp+=gained;G.qi=Math.max(0,G.qi-(BALANCE.cost?BALANCE.cost.qiMeditate:0));
   if(Math.random()<(BALANCE.meditate.enlightenChance+(mods.enlightenBonus||0))){const b=Math.floor(gained*1.5);G.exp+=b;addLog(`打坐修炼，获得${gained}修为。灵光一闪，顿悟+${b}！`,'great')}
   else addLog(`静心打坐，获得${gained}修为。`,'normal');
   if(Math.random()<0.12)triggerRandomEvent();
@@ -314,7 +303,7 @@ function actionPractice(){
   const lg=LG[G.linggen];
   const mods=(typeof Systems!=='undefined'&&Systems.getModifiers)?Systems.getModifiers():{expMult:0};
   const base=Math.floor((BALANCE.practice.base+G.realmIndex)*lg.expM*(1+(mods.expMult||0)));
-  const qiCost=BALANCE.cost.qiPractice;
+  const qiCost=(BALANCE.cost?BALANCE.cost.qiPractice:0);
   if(G.qi<qiCost){addLog('灵力不足，修习效果不佳。','danger');G.exp+=Math.floor(base*0.3)}
   else{G.qi-=qiCost;G.exp+=base;
     if(Math.random()<0.3)G.baseAtk++;if(Math.random()<0.2)G.baseDef++;
@@ -325,7 +314,7 @@ function actionPractice(){
 // -- Explore (now can find gongfa/fabao!) --
 function actionExplore(){
   const mods=(typeof Systems!=='undefined'&&Systems.getModifiers)?Systems.getModifiers():{exploreMult:0};
-  const r=Math.random();G.qi=Math.max(0,G.qi-BALANCE.cost.qiExplore);
+  const r=Math.random();G.qi=Math.max(0,G.qi-(BALANCE.cost?BALANCE.cost.qiExplore:0));
   if(r<0.2){
     const ls=Math.floor((Math.random()*BALANCE.explore.lingshiVar+BALANCE.explore.lingshiBase+G.realmIndex*BALANCE.explore.lingshiRealmScale)*(1+(mods.exploreMult||0)));G.lingshi+=ls;
     addLog(`探索发现${ls}块灵石！`,'good');
@@ -844,12 +833,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
 window.continueGame = continueGame;
 window.resetSave = resetSave;
 
-// ===== Expose UI handlers for inline onclick (mobile-friendly) =====
-// index.html uses inline onclick="..." attributes, so these must exist on window.
-window.showScreen = showScreen;
-window.switchTab = switchTab;
-window.selectLinggen = selectLinggen;
-window.startGame = startGame;
-window.doAction = doAction;
-window.clearSaveAndNew = clearSaveAndNew;
-// openQuestModal is exported by systems.js
+// ===== expose for inline onclick =====
+window.closeModal = closeModal;

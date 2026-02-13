@@ -12,7 +12,8 @@ const BALANCE = {
   breakthrough: { baseChance: 0.85, tribBase: 0.50, demonBase: 0.55 },
   combat: { critRate: 0.15, critMult: 2.0 },
   streak: { win2Atk: 0.05, win3Atk: 0.10, win4Atk: 0.15 },
-  quest: { rewardExpMult: 1.2, rewardLingshiMult: 1.0 }
+  quest: { rewardExpMult: 1.2, rewardLingshiMult: 1.0 },
+  cost: { qiMeditate: 2, qiPractice: 2, qiExplore: 0 }
 };
 
 const SAVE_KEY = 'fanren_save_v2';
